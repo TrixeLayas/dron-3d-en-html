@@ -1,0 +1,1850 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Dron 3D - Proyecto Escolar</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#050a14; font-family:'Courier New',monospace; overflow:hidden; }
+  canvas { display:block; }
+  #ui {
+    position:absolute; top:0; left:0; width:100%; padding:16px 20px;
+    display:flex; justify-content:space-between; align-items:flex-start;
+    pointer-events:none;
+  }
+  .panel {
+    background:rgba(0,20,40,0.85);
+    border:1px solid #00d4ff44;
+    border-radius:8px;
+    padding:12px 16px;
+    color:#00d4ff;
+    font-size:12px;
+    line-height:1.8;
+    max-width:200px;
+    backdrop-filter: blur(4px);
+  }
+  .panel h3 { font-size:13px; color:#fff; margin-bottom:6px; letter-spacing:1px; }
+  .panel .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; }
+  .blue { background:#00d4ff; }
+  .red  { background:#ff4444; }
+  .green{ background:#44ff88; }
+  .orange{background:#ff8822;}
+  #title {
+    position:absolute; bottom:20px; left:50%; transform:translateX(-50%);
+    color:#ffffff88; font-size:11px; letter-spacing:3px; text-transform:uppercase;
+  }
+  #controls {
+    position:absolute; bottom:40px; right:20px;
+    color:#ffffff44; font-size:10px; text-align:right; line-height:2;
+  }
+  
+  /* Panel de Monitor DevTools */
+  #monitor-panel {
+    position: fixed; bottom: 0; left: 0; width: 100%; height: 200px;
+    background: rgba(5, 10, 20, 0.95); border-top: 2px solid #00d4ff;
+    color: #fff; font-family: 'Consolas', monospace; font-size: 11px;
+    display: none; flex-direction: column; z-index: 1000;
+  }
+  #monitor-header {
+    background: #001428; padding: 6px 12px; display: flex; justify-content: space-between;
+    border-bottom: 1px solid #00d4ff44;
+  }
+  #monitor-table-container { overflow-y: auto; flex-grow: 1; }
+  #monitor-table { width: 100%; border-collapse: collapse; }
+  #monitor-table th { position: sticky; top: 0; background: #001428; text-align: left; padding: 4px 8px; color: #00d4ff; }
+  #monitor-table td { padding: 2px 8px; border-bottom: 1px solid #ffffff11; }
+  .status-success { color: #44ff88; }
+  .status-cached { color: #ffff44; }
+  .status-deduplicated { color: #00d4ff; }
+  .status-failed { color: #ff4444; }
+
+  /* Panel de Matemáticas */
+  #math-panel {
+    position: absolute; top: 16px; left: 240px; width: 360px;
+    background: rgba(0, 20, 40, 0.92); border: 1px solid #00d4ff66;
+    border-radius: 8px; padding: 14px; color: #00d4ff; font-size: 11px;
+    pointer-events: none; max-height: calc(100vh - 200px); overflow: hidden;
+  }
+  #math-panel h3 { color:#fff; font-size:12px; margin-bottom:8px; letter-spacing:1px; }
+  .math-row { display:flex; justify-content:space-between; align-items:baseline; margin:3px 0; border-bottom:1px solid #00d4ff11; padding-bottom:3px; }
+  .math-formula { font-style:italic; color:#aaddff; font-size:11px; flex:1; }
+  .math-eq { color:#fff; font-size:10px; margin:0 6px; }
+  .math-result { color:#44ff88; font-weight:bold; font-size:11px; min-width:65px; text-align:right; }
+  .math-section { color:#ffcc44; font-size:10px; margin:6px 0 3px; font-weight:bold; letter-spacing:1px; }
+  .math-label { color:#00d4ffaa; font-size:10px; flex:1; }
+  /* LOG Panel */
+  #log-panel {
+    position: fixed; bottom: 30px; left: 360px; width: 280px; max-height: 220px;
+    background: rgba(0,20,40,0.92); border: 1px solid #00d4ff44;
+    border-radius: 8px; padding: 8px; color: #00d4ff; font-size: 10px;
+    overflow-y: auto; z-index: 1500; pointer-events: auto;
+  }
+  #log-panel h4 { color:#fff; font-size:11px; margin-bottom:6px; letter-spacing:1px; display:flex; justify-content:space-between; align-items:center; }
+  .log-entry { border-bottom:1px solid #00d4ff22; padding:4px 0; line-height:1.6; }
+  .log-entry .log-time { color:#ffffff66; font-size:9px; }
+  .log-entry .log-event { color:#ffcc44; font-weight:bold; }
+  .log-entry .log-data { color:#aaddff; }
+  .log-entry .log-formula { color:#44ff88; font-style:italic; font-size:9px; }
+  /* Panel de Gráficas */
+  #graph-panel {
+    position: absolute; top: 16px; right: 16px; width: 260px;
+    background: rgba(0, 20, 40, 0.92); border: 1px solid #00d4ff44;
+    border-radius: 8px; padding: 12px; color: #00d4ff;
+  }
+  #telemetry-canvas { width: 100%; height: 120px; background: #000814; border: 1px solid #00d4ff22; margin-top: 8px; border-radius:4px; }
+  /* Panel de Control Visual */
+  #control-pad {
+    position: fixed; bottom: 30px; left: 30px;
+    display: grid; grid-template-areas: 
+      ". up ."
+      "left down right"
+      "yaw-l . yaw-r";
+    gap: 10px; pointer-events: auto;
+    z-index: 2000;
+  }
+  .ctrl-btn {
+    width: 55px; height: 55px; background: rgba(0, 212, 255, 0.2);
+    border: 2px solid #00d4ffaa; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: bold; font-size: 18px;
+    cursor: pointer; transition: all 0.1s; user-select: none;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+  }
+  .ctrl-btn:hover { background: rgba(0, 212, 255, 0.4); transform: scale(1.05); }
+  .ctrl-btn:active, .ctrl-btn.active {
+    background: #00d4ff; color: #050a14; box-shadow: 0 0 25px #00d4ff;
+    transform: scale(0.95);
+  }
+  #throttle-btns {
+    position: fixed; bottom: 30px; left: 220px;
+    display: flex; flex-direction: column; gap: 10px; pointer-events: auto;
+    z-index: 2000;
+  }
+  .wide-btn { width: 120px; height: 42px; font-size: 13px; }
+
+  /* ===== PANEL AUTOPILOTO ===== */
+  #autopilot-panel {
+    position: fixed; bottom: 30px; right: 300px;
+    width: 260px;
+    background: rgba(0, 20, 40, 0.95); border: 2px solid #44ff88;
+    border-radius: 10px; padding: 12px; color: #44ff88;
+    font-family: 'Courier New', monospace; font-size: 11px;
+    z-index: 2000; pointer-events: auto;
+    box-shadow: 0 0 20px rgba(68,255,136,0.3);
+  }
+  #autopilot-panel h3 { color:#fff; font-size:12px; margin-bottom:8px; letter-spacing:1px; display:flex; justify-content:space-between; }
+  .ap-btn {
+    width: 100%; padding: 8px; margin: 4px 0;
+    background: rgba(68,255,136,0.15); border: 1px solid #44ff88;
+    border-radius:6px; color:#44ff88; font-family:'Courier New',monospace;
+    font-size:11px; cursor:pointer; transition: all 0.15s; text-align:left;
+  }
+  .ap-btn:hover { background: rgba(68,255,136,0.35); }
+  .ap-btn.running { background: #44ff88; color: #050a14; font-weight:bold; box-shadow:0 0 15px #44ff88; }
+  .ap-btn.done { background: rgba(68,255,136,0.05); color:#44ff8877; border-color:#44ff8844; cursor:default; }
+  .ap-speed-row { display:flex; align-items:center; gap:6px; margin:8px 0 4px; }
+  .ap-speed-row label { color:#aaddff; font-size:10px; white-space:nowrap; }
+  #ap-speed-slider { flex:1; accent-color:#44ff88; cursor:pointer; }
+  #ap-speed-val { color:#44ff88; font-weight:bold; min-width:28px; text-align:right; }
+  #ap-status { margin-top:8px; padding:6px; background:rgba(0,0,0,0.4); border-radius:4px; font-size:10px; color:#ffcc44; min-height:18px; }
+  #ap-phase-bar { height:4px; background:#00d4ff22; border-radius:2px; margin-top:6px; overflow:hidden; }
+  #ap-phase-fill { height:100%; background:#44ff88; border-radius:2px; width:0%; transition:width 0.2s; }
+
+  /* Etiquetas de Hélices */
+  .prop-label {
+    position: absolute; background: rgba(0,0,0,0.6); color: #fff;
+    padding: 2px 6px; border-radius: 4px; font-size: 10px;
+    pointer-events: none; transform: translate(-50%, -100%);
+    border: 1px solid #00d4ff44; white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<canvas id="overlay2d" style="position:absolute;top:0;left:0;pointer-events:none;"></canvas>
+
+<div id="ui">
+  <div class="panel">
+    <h3>⚙ ESPECIFICACIONES</h3>
+    <div><span class="dot blue"></span>Tipo: Cuadricóptero</div>
+    <div><span class="dot green"></span>Motores: 4x Brushless</div>
+    <div><span class="dot orange"></span>Hélices: 4x Bipaleta</div>
+    <div><span class="dot blue"></span>Frame: Fibra de Carbono</div>
+    <div><span class="dot red"></span>Batería: LiPo 3S</div>
+    <div><span class="dot green"></span>Controlador: FC F4</div>
+  </div>
+
+  <!-- Panel de Matemáticas -->
+  <div id="math-panel">
+    <h3>🧮 PROCEDIMIENTO MATEMÁTICO</h3>
+    <div class="math-section">▸ EMPUJE TOTAL</div>
+    <div class="math-row">
+      <span class="math-formula">T = k · Σωᵢ²</span>
+      <span class="math-eq">=</span>
+      <span class="math-result" id="mf-thrust">0.00 N</span>
+    </div>
+    <div class="math-row">
+      <span class="math-label" id="mf-thrust-expand">k·(ω₁²+ω₂²+ω₃²+ω₄²)</span>
+      <span class="math-result" id="mf-thrust2" style="color:#aaddff">= 0.00 N</span>
+    </div>
+    <div class="math-section">▸ TORQUES (N·m)</div>
+    <div class="math-row">
+      <span class="math-formula">τᵣₒₗₗ = L·(F₁+F₂-F₃-F₄)</span>
+      <span class="math-eq">=</span>
+      <span class="math-result" id="mf-roll">0.00</span>
+    </div>
+    <div class="math-row">
+      <span class="math-formula">τₚᵢₜ꜀ₕ = L·(F₁+F₂-F₃-F₄)</span>
+      <span class="math-eq">=</span>
+      <span class="math-result" id="mf-pitch">0.00</span>
+    </div>
+    <div class="math-row">
+      <span class="math-formula">τᵧₐ꜀ = b·(F₁+F₃-F₂-F₄)</span>
+      <span class="math-eq">=</span>
+      <span class="math-result" id="mf-yaw">0.00</span>
+    </div>
+    <div class="math-section">▸ CINEMÁTICA VERTICAL</div>
+    <div class="math-row">
+      <span class="math-formula">a_y = ΣT/m - g</span>
+      <span class="math-eq">=</span>
+      <span class="math-result" id="mf-ay">-9.81 m/s²</span>
+    </div>
+    <div class="math-row">
+      <span class="math-label" id="mf-ay-expand">ΣT/m - 9.81</span>
+      <span class="math-result" id="mf-ay2" style="color:#aaddff">= -9.81</span>
+    </div>
+    <div class="math-row">
+      <span class="math-formula">v_y = v₀ + a·Δt</span>
+      <span class="math-eq">=</span>
+      <span class="math-result" id="mf-vy">0.00 m/s</span>
+    </div>
+    <div class="math-row">
+      <span class="math-formula">y = y₀ + v·Δt</span>
+      <span class="math-eq">=</span>
+      <span class="math-result" id="mf-y">0.00 m</span>
+    </div>
+    <div class="math-section">▸ VECTORES ESTADO</div>
+    <div class="math-row">
+      <span class="math-label">Pos [x, y, z] m</span>
+      <span class="math-result" id="mf-pos" style="color:#fff;font-size:10px">[0.00, 0.00, 0.00]</span>
+    </div>
+    <div class="math-row">
+      <span class="math-label">Vel H / V (m/s)</span>
+      <span class="math-result" id="mf-vel" style="color:#fff;font-size:10px">0.00 / 0.00</span>
+    </div>
+    <div class="math-row">
+      <span class="math-label">Rot [P°, Y°, R°]</span>
+      <span class="math-result" id="mf-rot" style="color:#ff8822;font-size:10px">[0.0, 0.0, 0.0]</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>📡 ESTADO</h3>
+    <div id="state-m1"><span class="dot green"></span>Motor 1: <span class="val">0</span> RPM</div>
+    <div id="state-m2"><span class="dot green"></span>Motor 2: <span class="val">0</span> RPM</div>
+    <div id="state-m3"><span class="dot green"></span>Motor 3: <span class="val">0</span> RPM</div>
+    <div id="state-m4"><span class="dot green"></span>Motor 4: <span class="val">0</span> RPM</div>
+    <div id="state-batt"><span class="dot blue"></span>Batería: <span class="val">12.6V</span></div>
+    <div id="state-alt"><span class="dot orange"></span>Altitud: <span class="val">0.0m</span></div>
+  </div>
+</div>
+
+<!-- Panel de Gráficas -->
+<div id="graph-panel">
+  <h3>📊 TELEMETRÍA</h3>
+  <div style="font-size:9px; color:#ffffff88; margin-bottom:4px;">
+    <b>y(t) = y₀ + v₀t + ½at²</b>
+  </div>
+  <canvas id="telemetry-canvas"></canvas>
+  <div style="margin-top:4px; font-size:9px; display:flex; gap:8px; flex-wrap:wrap;">
+    <span style="color:#44ff88;">■ Alt(m)</span>
+    <span style="color:#00d4ff;">■ Vel_V</span>
+    <span style="color:#ff8822;">■ Vel_H</span>
+    <span style="color:#ff4488;">■ Pitch°</span>
+  </div>
+  <div style="font-size:9px; color:#ffffff88; margin-top:6px; margin-bottom:4px;">
+    <b>Trayectoria XZ (vista top)</b>
+  </div>
+  <canvas id="traj-canvas" style="width:100%;height:80px;background:#000814;border:1px solid #00d4ff22;border-radius:4px;"></canvas>
+</div>
+
+<!-- LOG Panel -->
+<div id="log-panel">
+  <h4>📋 LOG DE MANIOBRAS <span id="log-clear-btn" style="cursor:pointer;color:#ff4444;font-size:9px" onclick="flightLog.clear()">✕ limpiar</span></h4>
+  <div id="log-body">
+    <div class="log-entry"><span class="log-data">Esperando despegue...</span></div>
+  </div>
+</div>
+
+<!-- Etiquetas de Hélices -->
+<div id="prop-labels">
+  <div id="label-0" class="prop-label">M1: 0 RPM<br>F: 0.0N</div>
+  <div id="label-1" class="prop-label">M2: 0 RPM<br>F: 0.0N</div>
+  <div id="label-2" class="prop-label">M3: 0 RPM<br>F: 0.0N</div>
+  <div id="label-3" class="prop-label">M4: 0 RPM<br>F: 0.0N</div>
+</div>
+
+<!-- Monitor DevTools -->
+<div id="monitor-panel">
+  <div id="monitor-header">
+    <span>🌐 NETWORK & OBSERVABILITY MONITOR</span>
+    <div id="monitor-stats">
+      Reqs: <span id="stat-reqs">0</span> | 
+      Hits: <span id="stat-hits">0</span> | 
+      Dedups: <span id="stat-dedups">0</span> | 
+      Errs: <span id="stat-errs">0</span> | 
+      Circuit: <span id="stat-circuit">CLOSED</span>
+    </div>
+    <button onclick="document.getElementById('monitor-panel').style.display='none'" style="background:none; border:1px solid #fff; color:#fff; cursor:pointer;">Close</button>
+  </div>
+  <div id="monitor-table-container">
+    <table id="monitor-table">
+      <thead>
+        <tr>
+          <th>Timestamp</th>
+          <th>ID</th>
+          <th>Endpoint</th>
+          <th>Op</th>
+          <th>Duration</th>
+          <th>Status</th>
+          <th>Source</th>
+        </tr>
+      </thead>
+      <tbody id="monitor-body"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Panel de Control Visual -->
+<div id="control-pad">
+  <div class="ctrl-btn" id="btn-ArrowUp" style="grid-area: up;">↑</div>
+  <div class="ctrl-btn" id="btn-ArrowLeft" style="grid-area: left;">←</div>
+  <div class="ctrl-btn" id="btn-ArrowDown" style="grid-area: down;">↓</div>
+  <div class="ctrl-btn" id="btn-ArrowRight" style="grid-area: right;">→</div>
+  <div class="ctrl-btn" id="btn-KeyA" style="grid-area: yaw-l;">A</div>
+  <div class="ctrl-btn" id="btn-KeyD" style="grid-area: yaw-r;">D</div>
+</div>
+
+<div id="throttle-btns">
+   <div class="ctrl-btn wide-btn" id="btn-KeyQ" style="background: rgba(68, 255, 136, 0.2); border-color: #44ff88;">Q (DESPEGAR)</div>
+   <div class="ctrl-btn wide-btn" id="btn-KeyW">W (Subir)</div>
+   <div class="ctrl-btn wide-btn" id="btn-KeyS">S (Bajar)</div>
+   <div class="ctrl-btn wide-btn" id="btn-ShiftLeft">SHIFT (Max)</div>
+   <div class="ctrl-btn wide-btn" id="btn-Space" style="color:#ff4444;">SPACE (Off)</div>
+ </div>
+
+<!-- ===== PANEL AUTOPILOTO ===== -->
+<div id="autopilot-panel">
+  <h3>🤖 AUTOPILOTO <span id="ap-badge" style="color:#ffcc44;font-size:9px;background:rgba(255,204,68,0.15);padding:2px 6px;border-radius:4px;border:1px solid #ffcc4466;">INACTIVO</span></h3>
+  <div class="ap-speed-row">
+    <label>⚡ Velocidad recorrido:</label>
+    <input type="range" id="ap-speed-slider" min="0.3" max="2.0" step="0.1" value="1.0">
+    <span id="ap-speed-val">1.0×</span>
+  </div>
+  <button class="ap-btn" id="ap-start-btn" onclick="autopilot.start()">▶ INICIAR RECORRIDO AUTOMÁTICO</button>
+  <button class="ap-btn" style="background:rgba(255,68,68,0.15);border-color:#ff4444;color:#ff4444;" onclick="autopilot.stop()">⏹ CANCELAR</button>
+  <div style="margin-top:8px;color:#aaddff;font-size:10px;font-weight:bold;">FASES DEL RECORRIDO:</div>
+  <div id="ap-phase-1" class="ap-btn" style="cursor:default; pointer-events:none;">① Despegue vertical</div>
+  <div id="ap-phase-2" class="ap-btn" style="cursor:default; pointer-events:none;">② Avance recto (hacia adelante)</div>
+  <div id="ap-phase-3" class="ap-btn" style="cursor:default; pointer-events:none;">③ Hélice descendente (R=3.5m, 2 vueltas)</div>
+  <div id="ap-phase-4" class="ap-btn" style="cursor:default; pointer-events:none;">④ Recta final y aterrizaje</div>
+  <div id="ap-status">Listo para iniciar...</div>
+  <div id="ap-phase-bar"><div id="ap-phase-fill"></div></div>
+</div>
+
+<div id="title">DRON CUADRICÓPTERO — PROYECTO ESCOLAR 3D</div>
+<div id="controls">
+  <button onclick="document.getElementById('monitor-panel').style.display='flex'" style="pointer-events:auto; background:#00d4ff22; border:1px solid #00d4ff; color:#00d4ff; padding:4px 8px; border-radius:4px; cursor:pointer; margin-bottom:10px;">Open Monitor (F12)</button><br>
+  W/S: Subir/Bajar | Q: Despegar<br>
+  R/F: Adelante/Atrás | T/V: Der/Izq<br>
+  Flechas: igual que R/F/T/V | A/D: Yaw<br>
+  Shift: Máximo Empuje<br>
+  Space: Cortar Motores<br>
+  🖱 Arrastrar: Cámara | Scroll: Zoom
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+const overlay2d = document.getElementById('overlay2d');
+overlay2d.width = window.innerWidth;
+overlay2d.height = window.innerHeight;
+const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+if (!gl) { document.body.innerHTML = '<p style="color:white;padding:40px">Tu navegador no soporta WebGL. Por favor usa Chrome o Firefox.</p>'; }
+
+// ===================== ARCHITECTURE: OBSERVABILITY & RESILIENCE =====================
+const REQ_STATUS = {
+  SUCCESS: 'Success',
+  CACHED: 'Cached',
+  DEDUPLICATED: 'Deduplicated',
+  FAILED: 'Failed',
+  TIMEOUT: 'Timeout',
+  OFFLINE: 'OfflineMode'
+};
+
+class RequestMonitor {
+  constructor() {
+    this.logs = [];
+    this.stats = { reqs: 0, hits: 0, dedups: 0, errs: 0 };
+    this.circuitStatus = 'CLOSED';
+  }
+
+  log(entry) {
+    const timestamp = new Date().toLocaleTimeString();
+    const guid = Math.random().toString(36).substring(2, 9).toUpperCase();
+    const row = { ...entry, timestamp, guid };
+    this.logs.unshift(row);
+    if (this.logs.length > 50) this.logs.pop();
+    
+    this.detectAnomalies(row);
+    this.updateStats(entry.status);
+    this.renderRow(row);
+  }
+
+  detectAnomalies(row) {
+    // Detect high frequency polling
+    const recent = this.logs.filter(l => l.endpoint === row.endpoint && l.op === row.op);
+    if (recent.length > 10) {
+      console.warn(`[ALERT] Excessive polling detected on ${row.endpoint}`);
+      document.getElementById('monitor-header').style.background = '#442200';
+    } else {
+      document.getElementById('monitor-header').style.background = '#001428';
+    }
+  }
+
+  updateStats(status) {
+    this.stats.reqs++;
+    if (status === REQ_STATUS.CACHED) this.stats.hits++;
+    if (status === REQ_STATUS.DEDUPLICATED) this.stats.dedups++;
+    if (status === REQ_STATUS.FAILED || status === REQ_STATUS.TIMEOUT) this.stats.errs++;
+    
+    document.getElementById('stat-reqs').innerText = this.stats.reqs;
+    document.getElementById('stat-hits').innerText = this.stats.hits;
+    document.getElementById('stat-dedups').innerText = this.stats.dedups;
+    document.getElementById('stat-errs').innerText = this.stats.errs;
+  }
+
+  renderRow(row) {
+    const tbody = document.getElementById('monitor-body');
+    const tr = document.createElement('tr');
+    const statusClass = `status-${row.status.toLowerCase()}`;
+    tr.innerHTML = `
+      <td>${row.timestamp}</td>
+      <td>${row.guid}</td>
+      <td>${row.endpoint}</td>
+      <td>${row.op}</td>
+      <td>${row.duration}ms</td>
+      <td class="${statusClass}">${row.status}</td>
+      <td>${row.source}</td>
+    `;
+    tbody.prepend(tr);
+    if (tbody.children.length > 50) tbody.lastElementChild.remove();
+  }
+}
+
+const monitor = new RequestMonitor();
+
+class GlobalCache {
+  constructor(ttl = 5000) {
+    this.store = new Map();
+    this.ttl = ttl;
+  }
+  get(key) {
+    const item = this.store.get(key);
+    if (!item) return null;
+    if (Date.now() - item.ts > this.ttl) {
+      this.store.delete(key);
+      return null;
+    }
+    return item.data;
+  }
+  set(key, data) {
+    this.store.set(key, { data, ts: Date.now() });
+  }
+}
+
+class SingleFlight {
+  constructor() {
+    this.promises = new Map();
+  }
+  async do(key, fn) {
+    if (this.promises.has(key)) {
+      return { data: await this.promises.get(key), status: REQ_STATUS.DEDUPLICATED };
+    }
+    const promise = fn();
+    this.promises.set(key, promise);
+    try {
+      const data = await promise;
+      return { data, status: REQ_STATUS.SUCCESS };
+    } finally {
+      this.promises.delete(key);
+    }
+  }
+}
+
+class CircuitBreaker {
+  constructor() {
+    this.state = 'CLOSED'; // CLOSED, OPEN, HALF_OPEN
+    this.failures = 0;
+    this.threshold = 3;
+    this.resetTimeout = 10000;
+  }
+  async call(fn) {
+    if (this.state === 'OPEN') {
+      return { error: 'Circuit Open', status: REQ_STATUS.OFFLINE };
+    }
+    try {
+      const res = await fn();
+      this.onSuccess();
+      return res;
+    } catch (e) {
+      this.onFailure();
+      throw e;
+    }
+  }
+  onFailure() {
+    this.failures++;
+    if (this.failures >= this.threshold) {
+      this.state = 'OPEN';
+      document.getElementById('stat-circuit').innerText = 'OPEN';
+      document.getElementById('stat-circuit').style.color = '#ff4444';
+      setTimeout(() => {
+        this.state = 'HALF_OPEN';
+        document.getElementById('stat-circuit').innerText = 'HALF_OPEN';
+        document.getElementById('stat-circuit').style.color = '#ff8822';
+      }, this.resetTimeout);
+    }
+  }
+  onSuccess() {
+    this.failures = 0;
+    this.state = 'CLOSED';
+    document.getElementById('stat-circuit').innerText = 'CLOSED';
+    document.getElementById('stat-circuit').style.color = '#44ff88';
+  }
+}
+
+class RequestManager {
+  constructor() {
+    this.cache = new GlobalCache();
+    this.sf = new SingleFlight();
+    this.cb = new CircuitBreaker();
+    this.throttle = new Semaphore(3);
+  }
+
+  async request(endpoint, op, source, fn) {
+    const start = performance.now();
+    const cacheKey = `${endpoint}:${op}`;
+    
+    // 1. Check Cache
+    const cached = this.cache.get(cacheKey);
+    if (cached) {
+      monitor.log({ endpoint, op, duration: 0, status: REQ_STATUS.CACHED, source });
+      return cached;
+    }
+
+    // 2. Single Flight + Throttling + Circuit Breaker
+    try {
+      const result = await this.sf.do(cacheKey, async () => {
+        return await this.throttle.use(async () => {
+          return await this.cb.call(async () => {
+            const data = await fn();
+            this.cache.set(cacheKey, data);
+            return data;
+          });
+        });
+      });
+
+      const duration = Math.round(performance.now() - start);
+      monitor.log({ endpoint, op, duration, status: result.status || REQ_STATUS.SUCCESS, source });
+      return result.data || result;
+    } catch (err) {
+      const duration = Math.round(performance.now() - start);
+      monitor.log({ endpoint, op, duration, status: REQ_STATUS.FAILED, source });
+      throw err;
+    }
+  }
+}
+
+class Semaphore {
+  constructor(max) {
+    this.max = max;
+    this.current = 0;
+    this.queue = [];
+  }
+  async use(fn) {
+    if (this.current >= this.max) {
+      await new Promise(r => this.queue.push(r));
+    }
+    this.current++;
+    try { return await fn(); }
+    finally {
+      this.current--;
+      if (this.queue.length > 0) this.queue.shift()();
+    }
+  }
+}
+
+const reqMgr = new RequestManager();
+
+// ===================== DRONE PHYSICS ENGINE =====================
+class DronePhysics {
+  constructor() {
+    this.pos = [0, 0.0, 0];  // Start on the ground
+    this.vel = [0, 0, 0];
+    this.rot = [0, 0, 0]; // Pitch (X), Yaw (Y), Roll (Z)
+    this.angVel = [0, 0, 0];
+    this.motors = [0, 0, 0, 0];
+    
+    this.mass = 1.2;       // Lighter for better response
+    this.gravity = 9.81;
+    this.kThrust = 5.5;    // Max Thrust = 5.5*4 = 22N. Weight = 1.2*9.8 = 11.77N. Hover ~53%
+    this.kTorque = 0.8;  
+    this.drag = 0.4;       
+    this.angDrag = 3.5;  
+    this.L = 0.38;
+    this.onGround = true;
+  }
+
+  update(dt, inputs) {
+    const t = inputs.throttle;
+    const p = inputs.pitch;
+    const r = inputs.roll;
+    const y = inputs.yaw;
+
+    // Store input flags for auto-level
+    this._pitchInput = (p !== 0);
+    this._rollInput  = (r !== 0);
+
+    // --- TARGET ANGLE MODE ---
+    // Instead of applying torques from mixer directly to angVel,
+    // we use a PD controller: input sets a target angle, and the
+    // controller drives the drone toward it, then snaps back to 0.
+    const maxTiltAngle = 0.38; // ~22 degrees max tilt
+    const targetPitch = p * maxTiltAngle;
+    const targetRoll  = r * maxTiltAngle;
+
+    // PD gains
+    const kP = 18.0;  // Proportional
+    const kD = 6.0;   // Derivative (damps oscillation)
+
+    const errPitch = targetPitch - this.rot[0];
+    const errRoll  = targetRoll  - this.rot[2];
+
+    // Angular acceleration from PD controller
+    const alphaPitch = kP * errPitch - kD * this.angVel[0];
+    const alphaRoll  = kP * errRoll  - kD * this.angVel[2];
+
+    this.angVel[0] += alphaPitch * dt;
+    this.angVel[2] += alphaRoll  * dt;
+
+    // Yaw: still torque-based but with strong damping
+    const tauYaw = this.kTorque * y * 8.0;
+    this.angVel[1] += (tauYaw / (this.mass * 0.1)) * dt;
+    this.angVel[1] *= (1 - this.angDrag * dt);
+
+    // Integrate rotations
+    this.rot[0] += this.angVel[0] * dt;
+    this.rot[1] += this.angVel[1] * dt;
+    this.rot[2] += this.angVel[2] * dt;
+
+    // Hard clamp angles
+    this.rot[0] = Math.max(-maxTiltAngle, Math.min(maxTiltAngle, this.rot[0]));
+    this.rot[2] = Math.max(-maxTiltAngle, Math.min(maxTiltAngle, this.rot[2]));
+
+    // When no input, zero out angVel for pitch/roll quickly
+    if (!this._pitchInput) this.angVel[0] *= (1 - 12 * dt);
+    if (!this._rollInput)  this.angVel[2] *= (1 - 12 * dt);
+
+    // 2. Calculate Forces
+    const thrusts = this.motors.map(m => m * this.kThrust);
+    const totalThrust = thrusts.reduce((a,b)=>a+b, 0);
+
+    // Motor mixing (only for thrust/telemetry display, not for rotation)
+    this.motors[0] = Math.max(0, Math.min(1, t + p + r - y));
+    this.motors[1] = Math.max(0, Math.min(1, t + p - r + y));
+    this.motors[2] = Math.max(0, Math.min(1, t - p + r + y));
+    this.motors[3] = Math.max(0, Math.min(1, t - p - r - y));
+
+    // Recalculate thrusts from mixed motors
+    const mixedThrusts = this.motors.map(m => m * this.kThrust);
+    const mixedTotal = mixedThrusts.reduce((a,b)=>a+b, 0);
+
+    // Orientation Vectors
+    const cosY = Math.cos(this.rot[1]), sinY = Math.sin(this.rot[1]);
+    const cosP = Math.cos(this.rot[0]), sinP = Math.sin(this.rot[0]);
+    const cosR = Math.cos(this.rot[2]), sinR = Math.sin(this.rot[2]);
+
+    // Local Up Vector (Y+) rotated to World Space
+    const ux = sinR * cosP;
+    const uy = cosR * cosP;
+    const uz = -sinP;
+
+    // World Space Thrust
+    const wThrustX = (ux * cosY + uz * sinY) * mixedTotal;
+    const wThrustY = uy * mixedTotal;
+    const wThrustZ = (-ux * sinY + uz * cosY) * mixedTotal;
+
+    // 4. Accelerations
+    const ax = wThrustX / this.mass;
+    const ay = (wThrustY / this.mass) - this.gravity;
+    const az = wThrustZ / this.mass;
+
+    // 5. Integration
+    this.vel[0] += ax * dt;
+    this.vel[1] += ay * dt;
+    this.vel[2] += az * dt;
+
+    this.vel = this.vel.map(v => v * (1 - this.drag * dt));
+
+    this.pos[0] += this.vel[0] * dt;
+    this.pos[1] += this.vel[1] * dt;
+    this.pos[2] += this.vel[2] * dt;
+
+    this.onGround = this.pos[1] <= 0.02;
+    if (this.onGround) {
+      this.pos[1] = 0.0;
+      this.vel[1] = Math.max(0, this.vel[1]);
+      this.vel[0] *= 0.85; this.vel[2] *= 0.85;
+      this.angVel[0] *= 0.5; this.angVel[2] *= 0.5;
+      // Level out on ground
+      this.rot[0] *= 0.8; this.rot[2] *= 0.8;
+    }
+  }
+}
+
+const physics = new DronePhysics();
+const keys = {};
+
+// Sync visual buttons with keys and mouse/touch
+function updateBtnState(code, isDown) {
+  keys[code] = isDown;
+  const btn = document.getElementById(`btn-${code}`);
+  if (btn) {
+    if (isDown) btn.classList.add('active');
+    else btn.classList.remove('active');
+  }
+}
+
+window.addEventListener('keydown', e => updateBtnState(e.code, true));
+window.addEventListener('keyup', e => updateBtnState(e.code, false));
+
+// Add mouse/touch interaction to buttons
+document.querySelectorAll('.ctrl-btn').forEach(btn => {
+  const code = btn.id.replace('btn-', '');
+  btn.addEventListener('mousedown', () => updateBtnState(code, true));
+  btn.addEventListener('mouseup', () => updateBtnState(code, false));
+  btn.addEventListener('mouseleave', () => updateBtnState(code, false));
+  
+  btn.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    updateBtnState(code, true);
+  });
+  btn.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    updateBtnState(code, false);
+  });
+});
+
+// ===================== SHADERS =====================
+const VS = `
+  attribute vec3 aPos;
+  attribute vec3 aNorm;
+  attribute vec3 aCol;
+  uniform mat4 uMVP;
+  uniform mat4 uMod;
+  varying vec3 vN;
+  varying vec3 vP;
+  varying vec3 vC;
+  void main(){
+    vec4 w = uMod * vec4(aPos,1.0);
+    vP = w.xyz; vN = mat3(uMod)*aNorm; vC = aCol;
+    gl_Position = uMVP * vec4(aPos,1.0);
+  }
+`;
+const FS = `
+  precision mediump float;
+  varying vec3 vN, vP, vC;
+  void main(){
+    vec3 L1 = normalize(vec3(3.0,5.0,4.0));
+    vec3 L2 = normalize(vec3(-2.0,1.0,-3.0));
+    vec3 n  = normalize(vN);
+    float d = max(dot(n,L1),0.0)*0.65 + max(dot(n,L2),0.0)*0.2 + 0.22;
+    vec3 V  = normalize(vec3(0,1,5)-vP);
+    vec3 R  = reflect(-L1,n);
+    float s = pow(max(dot(V,R),0.0),48.0)*0.45;
+    gl_FragColor = vec4(vC*d + s, 1.0);
+  }
+`;
+
+function mkShader(src,type){ const s=gl.createShader(type); gl.shaderSource(s,src); gl.compileShader(s); return s; }
+const prog=gl.createProgram();
+gl.attachShader(prog,mkShader(VS,gl.VERTEX_SHADER));
+gl.attachShader(prog,mkShader(FS,gl.FRAGMENT_SHADER));
+gl.linkProgram(prog); gl.useProgram(prog);
+
+const LOC = {
+  pos:  gl.getAttribLocation(prog,'aPos'),
+  norm: gl.getAttribLocation(prog,'aNorm'),
+  col:  gl.getAttribLocation(prog,'aCol'),
+  mvp:  gl.getUniformLocation(prog,'uMVP'),
+  mod:  gl.getUniformLocation(prog,'uMod'),
+};
+
+// ===================== GEOMETRY BUILDERS =====================
+function cylinder(r,h,segs,col){
+  const V=[],N=[],C=[],I=[];
+  // Side
+  for(let i=0;i<=segs;i++){
+    const a=i/segs*Math.PI*2, x=Math.cos(a)*r, z=Math.sin(a)*r;
+    V.push(x,h/2,z, x,-h/2,z);
+    N.push(x/r,0,z/r, x/r,0,z/r);
+    C.push(...col,...col);
+    if(i<segs){const b=i*2; I.push(b,b+1,b+2,b+1,b+3,b+2);}
+  }
+  // Caps
+  for(let i=0;i<segs;i++){
+    const a1=i/segs*Math.PI*2, a2=(i+1)/segs*Math.PI*2;
+    const b=V.length/3;
+    V.push(0,h/2,0, Math.cos(a1)*r,h/2,Math.sin(a1)*r, Math.cos(a2)*r,h/2,Math.sin(a2)*r);
+    N.push(0,1,0,0,1,0,0,1,0); C.push(...col,...col,...col); I.push(b,b+1,b+2);
+    const bb=V.length/3;
+    V.push(0,-h/2,0, Math.cos(a2)*r,-h/2,Math.sin(a2)*r, Math.cos(a1)*r,-h/2,Math.sin(a1)*r);
+    N.push(0,-1,0,0,-1,0,0,-1,0); C.push(...col,...col,...col); I.push(bb,bb+1,bb+2);
+  }
+  return {V,N,C,I};
+}
+
+function box(w,h,d,col){
+  const hw=w/2,hh=h/2,hd=d/2;
+  const faces=[
+    [[hw,-hh,-hd,hw,hh,-hd,hw,hh,hd,hw,-hh,hd],[1,0,0]],
+    [[-hw,-hh,hd,-hw,hh,hd,-hw,hh,-hd,-hw,-hh,-hd],[-1,0,0]],
+    [[-hw,hh,-hd,-hw,hh,hd,hw,hh,hd,hw,hh,-hd],[0,1,0]],
+    [[-hw,-hh,hd,-hw,-hh,-hd,hw,-hh,-hd,hw,-hh,hd],[0,-1,0]],
+    [[-hw,-hh,hd,hw,-hh,hd,hw,hh,hd,-hw,hh,hd],[0,0,1]],
+    [[hw,-hh,-hd,-hw,-hh,-hd,-hw,hh,-hd,hw,hh,-hd],[0,0,-1]],
+  ];
+  const V=[],N=[],C=[],I=[];
+  for(const [pts,n] of faces){
+    const b=V.length/3;
+    for(let i=0;i<12;i+=3){V.push(pts[i],pts[i+1],pts[i+2]); N.push(...n); C.push(...col);}
+    I.push(b,b+1,b+2, b,b+2,b+3);
+  }
+  return {V,N,C,I};
+}
+
+function cone(r,h,segs,col){
+  const V=[],N=[],C=[],I=[];
+  for(let i=0;i<segs;i++){
+    const a1=i/segs*Math.PI*2, a2=(i+1)/segs*Math.PI*2;
+    const b=V.length/3;
+    V.push(0,h,0, Math.cos(a1)*r,0,Math.sin(a1)*r, Math.cos(a2)*r,0,Math.sin(a2)*r);
+    const nx=(Math.cos(a1)+Math.cos(a2))/2, nz=(Math.sin(a1)+Math.sin(a2))/2;
+    N.push(nx,0.5,nz,nx,0.5,nz,nx,0.5,nz); C.push(...col,...col,...col); I.push(b,b+1,b+2);
+    // base cap
+    const bb=V.length/3;
+    V.push(0,0,0, Math.cos(a2)*r,0,Math.sin(a2)*r, Math.cos(a1)*r,0,Math.sin(a1)*r);
+    N.push(0,-1,0,0,-1,0,0,-1,0); C.push(...col,...col,...col); I.push(bb,bb+1,bb+2);
+  }
+  return {V,N,C,I};
+}
+
+function blade(col){
+  // Propeller blade — tapered ellipse shape
+  const V=[],N=[],C=[],I=[];
+  const segs=24;
+  for(let i=0;i<=segs;i++){
+    const t=i/segs;
+    const x=t*0.58;
+    const w=0.07*Math.sin(t*Math.PI)*(1-t*0.3);
+    const twist=t*0.18;
+    V.push(x, twist+0.006, w);
+    V.push(x, twist-0.006,-w);
+    N.push(0,1,0, 0,-1,0);
+    C.push(...col,...col);
+    if(i<segs){ const b=i*2; I.push(b,b+2,b+1, b+1,b+2,b+3); }
+  }
+  return {V,N,C,I};
+}
+
+function torus(R,r,segs,rings,col){
+  const V=[],N=[],C=[],I=[];
+  for(let i=0;i<=rings;i++){
+    const u=i/rings*Math.PI*2;
+    for(let j=0;j<=segs;j++){
+      const v=j/segs*Math.PI*2;
+      const cv=Math.cos(v), sv=Math.sin(v);
+      V.push((R+r*cv)*Math.cos(u), r*sv, (R+r*cv)*Math.sin(u));
+      N.push(cv*Math.cos(u), sv, cv*Math.sin(u));
+      C.push(...col);
+    }
+  }
+  for(let i=0;i<rings;i++) for(let j=0;j<segs;j++){
+    const a=i*(segs+1)+j;
+    I.push(a,a+segs+1,a+1, a+1,a+segs+1,a+segs+2);
+  }
+  return {V,N,C,I};
+}
+
+// ===================== TRANSFORM + MERGE =====================
+function applyT(geo, tx,ty,tz, rx=0,ry=0,rz=0, sx=1,sy=1,sz=1){
+  const V=[...geo.V], N=[...geo.N];
+  const cX=Math.cos(rx),sX=Math.sin(rx);
+  const cY=Math.cos(ry),sY=Math.sin(ry);
+  const cZ=Math.cos(rz),sZ=Math.sin(rz);
+  for(let i=0;i<V.length;i+=3){
+    let x=V[i]*sx, y=V[i+1]*sy, z=V[i+2]*sz;
+    // RotX
+    let y2=cX*y-sX*z, z2=sX*y+cX*z; y=y2; z=z2;
+    // RotY
+    let x2=cY*x+sY*z, z3=-sY*x+cY*z; x=x2; z=z3;
+    // RotZ
+    let x3=cZ*x-sZ*y, y3=sZ*x+cZ*y; x=x3; y=y3;
+    V[i]=x+tx; V[i+1]=y+ty; V[i+2]=z+tz;
+    // Normals (no scale, no translate)
+    let nx=N[i],ny=N[i+1],nz=N[i+2];
+    let ny2=cX*ny-sX*nz, nz2=sX*ny+cX*nz; ny=ny2; nz=nz2;
+    let nx2=cY*nx+sY*nz, nz3=-sY*nx+cY*nz; nx=nx2; nz=nz3;
+    let nx3=cZ*nx-sZ*ny, ny3=sZ*nx+cZ*ny;
+    N[i]=nx3; N[i+1]=ny3; N[i+2]=nz3;
+  }
+  return {...geo, V, N};
+}
+
+function merge(geos){
+  const V=[],N=[],C=[],I=[];
+  for(const g of geos){
+    const base=V.length/3;
+    V.push(...g.V); N.push(...g.N); C.push(...g.C);
+    I.push(...g.I.map(i=>i+base));
+  }
+  return {V,N,C,I};
+}
+
+// ===================== TELEMETRY GRAPH =====================
+class TelemetryGraph {
+  constructor() {
+    this.canvas = document.getElementById('telemetry-canvas');
+    this.ctx = this.canvas.getContext('2d');
+    this.trajCanvas = document.getElementById('traj-canvas');
+    this.trajCtx = this.trajCanvas.getContext('2d');
+    this.history = [];
+    this.maxPoints = 150;
+    this.trajHistory = [];
+  }
+  update(alt, velV, velH, pitch, posX, posZ) {
+    this.history.push({ alt, velV, velH, pitch });
+    if (this.history.length > this.maxPoints) this.history.shift();
+    this.trajHistory.push({ x: posX, z: posZ });
+    if (this.trajHistory.length > 300) this.trajHistory.shift();
+    this.draw();
+    this.drawTraj();
+  }
+  draw() {
+    const w = this.canvas.width = this.canvas.offsetWidth || 260;
+    const h = this.canvas.height = this.canvas.offsetHeight || 120;
+    const ctx = this.ctx;
+    ctx.clearRect(0,0,w,h);
+
+    // Grid
+    ctx.strokeStyle = '#0a1f30'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    for(let i=0; i<=4; i++) { let y=h/4*i; ctx.moveTo(0,y); ctx.lineTo(w,y); }
+    for(let i=0; i<=6; i++) { let x=w/6*i; ctx.moveTo(x,0); ctx.lineTo(x,h); }
+    ctx.stroke();
+
+    const maxAlt  = Math.max(2, ...this.history.map(p => p.alt));
+    const maxVelV = Math.max(2, ...this.history.map(p => Math.abs(p.velV)));
+    const maxVelH = Math.max(2, ...this.history.map(p => Math.abs(p.velH)));
+    const maxPitch= Math.max(10, ...this.history.map(p => Math.abs(p.pitch)));
+
+    const draw4 = (key, max, color, center) => {
+      ctx.strokeStyle = color; ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      this.history.forEach((p, i) => {
+        const x = (i / this.maxPoints) * w;
+        const y = center ? h/2 - (p[key] / max) * h/2 * 0.85
+                         : h - (p[key] / max) * h * 0.85 - 5;
+        i === 0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+      });
+      ctx.stroke();
+    };
+    draw4('alt',   maxAlt,  '#44ff88', false);
+    draw4('velV',  maxVelV, '#00d4ff', true);
+    draw4('velH',  maxVelH, '#ff8822', true);
+    draw4('pitch', maxPitch,'#ff4488', true);
+
+    // Zero line
+    ctx.strokeStyle='#ffffff22'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(0,h/2); ctx.lineTo(w,h/2); ctx.stroke();
+
+    // Latest values
+    if (this.history.length > 0) {
+      const last = this.history[this.history.length-1];
+      ctx.font = '9px Courier New';
+      ctx.fillStyle='#44ff88'; ctx.fillText(`${last.alt.toFixed(1)}m`, 4, 10);
+      ctx.fillStyle='#00d4ff'; ctx.fillText(`${last.velV.toFixed(1)}m/s`, 40, 10);
+      ctx.fillStyle='#ff8822'; ctx.fillText(`H:${last.velH.toFixed(1)}`, 82, 10);
+    }
+  }
+  drawTraj() {
+    const c = this.trajCanvas;
+    const w = c.width = c.offsetWidth || 260;
+    const h = c.height = c.offsetHeight || 80;
+    const ctx = this.trajCtx;
+    ctx.clearRect(0,0,w,h);
+
+    if (this.trajHistory.length < 2) return;
+
+    const xs = this.trajHistory.map(p=>p.x);
+    const zs = this.trajHistory.map(p=>p.z);
+    const minX=Math.min(-1,...xs), maxX=Math.max(1,...xs);
+    const minZ=Math.min(-1,...zs), maxZ=Math.max(1,...zs);
+    const rangeX = maxX-minX || 2, rangeZ = maxZ-minZ || 2;
+    const pad = 10;
+    const toScrX = x => pad + (x-minX)/rangeX*(w-pad*2);
+    const toScrZ = z => pad + (z-minZ)/rangeZ*(h-pad*2);
+
+    // Grid lines
+    ctx.strokeStyle='#0a1f30'; ctx.lineWidth=1;
+    ctx.beginPath();
+    ctx.moveTo(0, toScrZ(0)); ctx.lineTo(w, toScrZ(0));
+    ctx.moveTo(toScrX(0), 0); ctx.lineTo(toScrX(0), h);
+    ctx.stroke();
+
+    // Trajectory gradient
+    ctx.lineWidth=2;
+    for (let i=1; i<this.trajHistory.length; i++) {
+      const t = i/this.trajHistory.length;
+      ctx.strokeStyle = `rgba(0,${Math.floor(100+t*155)},${Math.floor(200+t*55)},${t})`;
+      ctx.beginPath();
+      ctx.moveTo(toScrX(this.trajHistory[i-1].x), toScrZ(this.trajHistory[i-1].z));
+      ctx.lineTo(toScrX(this.trajHistory[i].x),   toScrZ(this.trajHistory[i].z));
+      ctx.stroke();
+    }
+
+    // Current position dot
+    const last = this.trajHistory[this.trajHistory.length-1];
+    ctx.fillStyle='#ffcc00';
+    ctx.beginPath();
+    ctx.arc(toScrX(last.x), toScrZ(last.z), 4, 0, Math.PI*2);
+    ctx.fill();
+
+    // Labels
+    ctx.fillStyle='#ffffff44'; ctx.font='8px Courier New';
+    ctx.fillText('X', w-12, toScrZ(0)-2);
+    ctx.fillText('Z', toScrX(0)+3, 10);
+  }
+}
+const graph = new TelemetryGraph();
+
+// ===================== FLIGHT LOG =====================
+const flightLog = {
+  entries: [],
+  lastEvent: null,
+  eventCooldown: 0,
+
+  add(event, data, formula) {
+    const now = new Date();
+    const time = now.toLocaleTimeString('es', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    const entry = { time, event, data, formula };
+    this.entries.unshift(entry);
+    if (this.entries.length > 30) this.entries.pop();
+    this.render();
+  },
+
+  render() {
+    const body = document.getElementById('log-body');
+    if (!body) return;
+    body.innerHTML = this.entries.map(e => `
+      <div class="log-entry">
+        <span class="log-time">${e.time}</span>
+        <span class="log-event"> ${e.event}</span><br>
+        <span class="log-data">${e.data}</span><br>
+        <span class="log-formula">${e.formula}</span>
+      </div>`).join('');
+  },
+
+  clear() {
+    this.entries = [];
+    this.render();
+    document.getElementById('log-body').innerHTML = '<div class="log-entry"><span class="log-data">Log limpiado.</span></div>';
+  },
+
+  // Called each frame with physics state
+  update(physics, inputs, dt) {
+    this.eventCooldown -= dt;
+    if (this.eventCooldown > 0) return;
+
+    const alt = physics.pos[1];
+    const velV = physics.vel[1];
+    const velH = Math.sqrt(physics.vel[0]**2 + physics.vel[2]**2);
+    const pitch = physics.rot[0] * 180/Math.PI;
+    const roll  = physics.rot[2] * 180/Math.PI;
+    const yaw   = physics.rot[1] * 180/Math.PI;
+    const totalT = physics.motors.reduce((a,b)=>a+b*physics.kThrust,0);
+    const ay = (totalT/physics.mass - physics.gravity).toFixed(2);
+
+    // Detect events
+    if (inputs.throttle > 0.7 && physics.onGround) {
+      this.add('🚀 DESPEGUE', `Alt: ${alt.toFixed(2)}m | T_total: ${totalT.toFixed(1)}N`,
+        `T > mg: ${totalT.toFixed(1)} > ${(physics.mass*physics.gravity).toFixed(1)}N ✓`);
+      this.eventCooldown = 1.5;
+    } else if (!physics.onGround && Math.abs(velV) > 0.3 && velV > 0) {
+      this.add('⬆ SUBIDA', `Alt: ${alt.toFixed(2)}m | Vel_V: ${velV.toFixed(2)} m/s`,
+        `a_y = ΣT/m - g = ${(totalT/physics.mass).toFixed(2)} - 9.81 = ${ay} m/s²`);
+      this.eventCooldown = 0.8;
+    } else if (!physics.onGround && velV < -0.3) {
+      this.add('⬇ DESCENSO', `Alt: ${alt.toFixed(2)}m | Vel_V: ${velV.toFixed(2)} m/s`,
+        `a_y = ${ay} m/s² | y(t)=y₀+v·Δt=${alt.toFixed(2)}m`);
+      this.eventCooldown = 0.8;
+    } else if (!physics.onGround && velH > 0.5) {
+      const dir = Math.abs(pitch)>1 ? (pitch>0?'ADELANTE':'ATRÁS') : (Math.abs(roll)>1?(roll>0?'DERECHA':'IZQUIERDA'):'LATERAL');
+      this.add('➡ TRASLACIÓN '+dir, `Vel_H: ${velH.toFixed(2)} m/s | Alt: ${alt.toFixed(2)}m`,
+        `Pitch: ${pitch.toFixed(1)}° | Roll: ${roll.toFixed(1)}° → Fuerza horizontal`);
+      this.eventCooldown = 0.6;
+    } else if (!physics.onGround && Math.abs(yaw) > 10 && inputs.yaw !== 0) {
+      this.add('🔄 GIRO YAW', `Yaw: ${yaw.toFixed(1)}° | Alt: ${alt.toFixed(2)}m`,
+        `τ_yaw = b·(ω₁+ω₃-ω₂-ω₄) = ${(physics.kTorque*(physics.motors[0]+physics.motors[2]-physics.motors[1]-physics.motors[3])).toFixed(3)} N·m`);
+      this.eventCooldown = 0.8;
+    } else if (physics.onGround && alt < 0.05 && this.lastEvent !== 'ATERRIZAJE') {
+      this.add('🛬 ATERRIZAJE', `Vel_impacto: ${Math.abs(velV).toFixed(2)} m/s | Alt: 0.00m`,
+        `Impulso = m·Δv = ${physics.mass}·${Math.abs(velV).toFixed(2)} = ${(physics.mass*Math.abs(velV)).toFixed(2)} N·s`);
+      this.lastEvent = 'ATERRIZAJE';
+      this.eventCooldown = 2.0;
+    } else if (!physics.onGround) {
+      this.lastEvent = null;
+    }
+  }
+};
+
+// ===================== BUILD DRONE =====================
+const DARK   =[0.12,0.13,0.16];
+const MID    =[0.22,0.24,0.30];
+const LIGHT  =[0.45,0.50,0.58];
+const CARBON =[0.10,0.10,0.12];
+const CYAN   =[0.0,0.83,1.0];
+const BLUE   =[0.15,0.55,1.0];
+const RED    =[0.9,0.15,0.15];
+const ORANGE =[1.0,0.50,0.10];
+const GREEN  =[0.2,0.9,0.4];
+const YELLOW =[1.0,0.85,0.1];
+const WHITE  =[0.95,0.95,0.95];
+const LENS   =[0.05,0.4,0.7];
+
+const parts=[];
+
+// ---- BODY ----
+// Main chassis plate
+parts.push(applyT(box(0.42,0.07,0.42,CARBON), 0,0,0));
+// Top shell
+parts.push(applyT(box(0.30,0.06,0.30,DARK), 0,0.065,0));
+// Top bump (electronics bay)
+parts.push(applyT(cylinder(0.08,0.05,20,MID), 0,0.11,0));
+// Antenna
+parts.push(applyT(cylinder(0.005,0.18,8,DARK), 0,0.20,0.04));
+parts.push(applyT(cone(0.01,0.02,8,YELLOW), 0,0.29,0.04));
+// Battery (bottom)
+parts.push(applyT(box(0.32,0.055,0.16,[0.08,0.08,0.10]), 0,-0.065,0));
+// Battery strap
+parts.push(applyT(box(0.34,0.012,0.012,CYAN), 0,-0.048,0));
+// FC stack (visible chip on top)
+parts.push(applyT(box(0.06,0.012,0.06,GREEN), 0,0.135,0));
+parts.push(applyT(box(0.04,0.008,0.04,[0.4,0.2,0.0]), 0,0.148,0));
+
+// Front camera
+parts.push(applyT(box(0.06,0.05,0.04,DARK), 0.20,-0.01,0));
+parts.push(applyT(cylinder(0.018,0.025,16,CARBON), 0.225,-0.01,0, 0,0,Math.PI/2));
+parts.push(applyT(cylinder(0.013,0.005,16,LENS), 0.235,-0.01,0, 0,0,Math.PI/2));
+// Camera tilt
+parts.push(applyT(cylinder(0.005,0.06,8,DARK), 0.20,-0.005,0.025, Math.PI/2));
+
+// ---- 4 ARMS + MOTORS ----
+const motorPos=[
+  [ 0.38, 0, 0.38],  // FL
+  [ 0.38, 0,-0.38],  // FR
+  [-0.38, 0, 0.38],  // RL
+  [-0.38, 0,-0.38],  // RR
+];
+const motorCols=[CYAN,CYAN,RED,RED]; // front=cyan, rear=red (standard FPV)
+const bladeCols=[[0.2,0.75,1.0],[0.2,0.75,1.0],[1.0,0.4,0.1],[1.0,0.4,0.1]];
+const propDir=[1,-1,-1,1]; // CW/CCW
+
+for(let i=0;i<4;i++){
+  const [mx,my,mz]=motorPos[i];
+  const mc=motorCols[i];
+  const bc=bladeCols[i];
+
+  // Arm (tapered box connecting center to motor)
+  const ax=mx/2, az=mz/2;
+  const armAngle=Math.atan2(mz,mx);
+  const armLen=Math.sqrt(mx*mx+mz*mz)/2;
+  // Arm tube (rectangular carbon)
+  parts.push(applyT(box(armLen*2,0.028,0.045,CARBON), ax,0,az, 0,armAngle));
+  // Arm brace
+  parts.push(applyT(box(armLen*1.8,0.012,0.028,[0.18,0.18,0.22]), ax,0,az, 0,armAngle));
+
+  // Motor mount plate
+  parts.push(applyT(box(0.085,0.018,0.085,MID), mx,my,mz));
+  // Motor bottom (stator)
+  parts.push(applyT(cylinder(0.042,0.04,20,MID), mx,my+0.018,mz));
+  // Motor bell (rotor)
+  parts.push(applyT(cylinder(0.048,0.028,20,mc), mx,my+0.05,mz));
+  // Motor top cap
+  parts.push(applyT(cylinder(0.012,0.01,12,LIGHT), mx,my+0.068,mz));
+  // Motor shaft
+  parts.push(applyT(cylinder(0.006,0.03,8,WHITE), mx,my+0.075,mz));
+  // Prop nut
+  parts.push(applyT(cylinder(0.014,0.012,6,YELLOW), mx,my+0.09,mz));
+
+  // Prop guard ring
+  parts.push(applyT(torus(0.135,0.007,10,28,DARK), mx,my+0.072,mz));
+
+  // ESC (speed controller) on arm
+  parts.push(applyT(box(0.04,0.012,0.025,[0.15,0.15,0.2]), ax*1.2,0.02,az*1.2));
+
+  // LED on motor
+  parts.push(applyT(cylinder(0.008,0.005,8,mc), mx,my+0.065,mz));
+
+  // Blades stored separately for animation
+  // (stored as static here, we'll animate via uniform)
+}
+
+// ---- LANDING GEAR ----
+// 4 legs
+const legPos=[
+  [ 0.13, 0, 0.17],
+  [ 0.13, 0,-0.17],
+  [-0.13, 0, 0.17],
+  [-0.13, 0,-0.17],
+];
+for(const [lx,ly,lz] of legPos){
+  // Vertical strut
+  parts.push(applyT(cylinder(0.008,0.15,8,DARK), lx,ly-0.11,lz));
+  // Foot flare
+  parts.push(applyT(cylinder(0.016,0.01,8,DARK), lx,ly-0.19,lz));
+}
+// Skid bars
+parts.push(applyT(box(0.3,0.01,0.01,DARK), 0,-0.21,0.17));
+parts.push(applyT(box(0.3,0.01,0.01,DARK), 0,-0.21,-0.17));
+parts.push(applyT(box(0.01,0.01,0.38,DARK), 0.15,-0.21,0));
+parts.push(applyT(box(0.01,0.01,0.38,DARK), -0.15,-0.21,0));
+
+// ===================== UPLOAD STATIC BODY =====================
+const droneGeo = merge(parts);
+
+// ---- GROUND GRID (separate mesh, static at world origin) ----
+const groundParts=[];
+for(let i=-10; i<=10; i++) {
+  groundParts.push(applyT(box(20,0.001,0.02,[0.1,0.2,0.3]), 0,-0.22,i, 0,0,0));
+  groundParts.push(applyT(box(0.02,0.001,20,[0.1,0.2,0.3]), i,-0.22,0, 0,0,0));
+}
+const groundGeo = merge(groundParts);
+
+// BLADES (animated separately)
+const bladeGeos=[];
+for(let i=0;i<4;i++){
+  const [mx,my,mz]=motorPos[i];
+  const bc=bladeCols[i];
+  const b1=applyT(blade(bc), mx,my+0.095,mz);
+  const b2=applyT(blade(bc), mx,my+0.095,mz, 0,Math.PI,0);
+  bladeGeos.push(merge([b1,b2]));
+}
+
+function mkBuf(data, type=gl.ARRAY_BUFFER, usage=gl.STATIC_DRAW){
+  const buf=gl.createBuffer();
+  gl.bindBuffer(type, buf);
+  if(type===gl.ELEMENT_ARRAY_BUFFER) gl.bufferData(type,new Uint16Array(data),usage);
+  else gl.bufferData(type,new Float32Array(data),usage);
+  return buf;
+}
+
+const body={
+  vbuf:mkBuf(droneGeo.V), nbuf:mkBuf(droneGeo.N), cbuf:mkBuf(droneGeo.C),
+  ibuf:mkBuf(droneGeo.I,gl.ELEMENT_ARRAY_BUFFER), count:droneGeo.I.length
+};
+
+const blades=bladeGeos.map(g=>({
+  vbuf:mkBuf(g.V), nbuf:mkBuf(g.N), cbuf:mkBuf(g.C),
+  ibuf:mkBuf(g.I,gl.ELEMENT_ARRAY_BUFFER), count:g.I.length
+}));
+
+const ground={
+  vbuf:mkBuf(groundGeo.V), nbuf:mkBuf(groundGeo.N), cbuf:mkBuf(groundGeo.C),
+  ibuf:mkBuf(groundGeo.I,gl.ELEMENT_ARRAY_BUFFER), count:groundGeo.I.length
+};
+
+// ===================== MATH =====================
+const M4={
+  ident:()=>[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],
+  mul(a,b){
+    const o=new Array(16).fill(0);
+    for(let r=0;r<4;r++) for(let c=0;c<4;c++) for(let k=0;k<4;k++) o[r+c*4]+=a[r+k*4]*b[k+c*4];
+    return o;
+  },
+  proj(fov,asp,near,far){
+    const f=1/Math.tan(fov/2);
+    return[f/asp,0,0,0, 0,f,0,0, 0,0,(far+near)/(near-far),-1, 0,0,2*far*near/(near-far),0];
+  },
+  tran(x,y,z){return[1,0,0,0,0,1,0,0,0,0,1,0,x,y,z,1];},
+  rotY(a){const c=Math.cos(a),s=Math.sin(a);return[c,0,s,0,0,1,0,0,-s,0,c,0,0,0,0,1];},
+  rotX(a){const c=Math.cos(a),s=Math.sin(a);return[1,0,0,0,0,c,-s,0,0,s,c,0,0,0,0,1];},
+  rotZ(a){const c=Math.cos(a),s=Math.sin(a);return[c,s,0,0,-s,c,0,0,0,0,1,0,0,0,0,1];},
+  rotY_local(m,a){return M4.mul(m,M4.rotY(a));},
+  // Rotation around axis through point
+  rotAroundY(m,px,pz,a){
+    return M4.mul(M4.mul(M4.mul(m,M4.tran(px,0,pz)),M4.rotY(a)),M4.tran(-px,0,-pz));
+  }
+};
+
+// ===================== INTERACTION =====================
+let rotX=-0.3, rotY_=0.5, zoom=2.6, drag=false, lmx=0,lmy=0;
+canvas.addEventListener('mousedown',e=>{drag=true;lmx=e.clientX;lmy=e.clientY;});
+window.addEventListener('mouseup',()=>drag=false);
+window.addEventListener('mousemove',e=>{
+  if(!drag)return;
+  rotY_+=(e.clientX-lmx)*0.009;
+  rotX +=(e.clientY-lmy)*0.009;
+  rotX=Math.max(-1.4,Math.min(1.4,rotX));
+  lmx=e.clientX; lmy=e.clientY;
+});
+canvas.addEventListener('wheel',e=>{zoom+=e.deltaY*0.003;zoom=Math.max(1,Math.min(6,zoom));e.preventDefault();},{passive:false});
+let lt=null;
+canvas.addEventListener('touchstart',e=>{lt=e.touches[0];});
+canvas.addEventListener('touchmove',e=>{
+  if(!lt)return;
+  const t=e.touches[0];
+  rotY_+=(t.clientX-lt.clientX)*0.009;
+  rotX +=(t.clientY-lt.clientY)*0.009;
+  lt=t; e.preventDefault();
+},{passive:false});
+window.addEventListener('resize',()=>{
+  canvas.width=window.innerWidth;canvas.height=window.innerHeight;
+  const ov=document.getElementById('overlay2d');
+  ov.width=window.innerWidth; ov.height=window.innerHeight;
+});
+
+// ===================== DRAW =====================
+function drawMesh(mesh, mvp, model){
+  gl.uniformMatrix4fv(LOC.mvp,false,mvp);
+  gl.uniformMatrix4fv(LOC.mod,false,model);
+  gl.bindBuffer(gl.ARRAY_BUFFER,mesh.vbuf); gl.enableVertexAttribArray(LOC.pos); gl.vertexAttribPointer(LOC.pos,3,gl.FLOAT,false,0,0);
+  gl.bindBuffer(gl.ARRAY_BUFFER,mesh.nbuf); gl.enableVertexAttribArray(LOC.norm);gl.vertexAttribPointer(LOC.norm,3,gl.FLOAT,false,0,0);
+  gl.bindBuffer(gl.ARRAY_BUFFER,mesh.cbuf); gl.enableVertexAttribArray(LOC.col); gl.vertexAttribPointer(LOC.col,3,gl.FLOAT,false,0,0);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,mesh.ibuf);
+  gl.drawElements(gl.TRIANGLES,mesh.count,gl.UNSIGNED_SHORT,0);
+}
+
+const propSpeeds=[1,-1,-1,1];
+
+function project(pos, mvp, w, h){
+  const p = [pos[0], pos[1], pos[2], 1];
+  const out = [0,0,0,0];
+  for(let i=0; i<4; i++) {
+    for(let j=0; j<4; j++) out[i] += mvp[j*4+i] * p[j];
+  }
+  if(out[3] === 0) return null;
+  return {
+    x: (out[0]/out[3] * 0.5 + 0.5) * w,
+    y: (1.0 - (out[1]/out[3] * 0.5 + 0.5)) * h,
+    z: out[3]
+  };
+}
+
+// ===================== AUTOPILOTO — CONTROL DE POSICIÓN =====================
+// En lugar de simular inputs, controlamos directamente la posición del dron
+// siguiendo waypoints matemáticos precisos (hélice, rectas, etc.)
+// Los vectores velocidad y aceleración centrípeta se dibujan en overlay 2D.
+
+const autopilot = (() => {
+  // ── Estado interno ─────────────────────────────────────────
+  let phase = 0;        // 0=inactivo 1=despegue 2=recta 3=hélice 4=recta final+aterrizaje
+  let phaseTime = 0;
+  let active = false;
+  let speedMult = 1.0;
+  let overridePos = false; // cuando true, sobreescribimos physics.pos directamente
+
+  // Parámetros de la hélice (igual que la imagen)
+  const HELIX_R  = 3.5;   // radio (metros)
+  const HELIX_H0 = 14.0;  // altura inicial de la hélice
+  const HELIX_H1 = 2.5;   // altura final (desciende)
+  const HELIX_TURNS = 2.0; // vueltas totales
+  const HELIX_DUR = 8.0;   // segundos para completar la hélice (base)
+
+  // Centro de la hélice en XZ
+  const HELIX_CX = 0, HELIX_CZ = 0;
+
+  // Datos para overlay 2D
+  let vecVelocity   = [0,0,0];
+  let vecCentripetal= [0,0,0];
+  let showVectors   = false;
+  let helixAngle    = 0; // ángulo actual en la hélice
+
+  const PHASE_IDS = ['ap-phase-1','ap-phase-2','ap-phase-3','ap-phase-4'];
+
+  function setStatus(msg) { document.getElementById('ap-status').innerText = msg; }
+
+  function setBadge(text, color) {
+    const b = document.getElementById('ap-badge');
+    b.innerText = text; b.style.color = color;
+    b.style.background = 'rgba(0,0,0,0.3)'; b.style.borderColor = color;
+  }
+
+  function updatePhaseUI(p) {
+    PHASE_IDS.forEach((id, i) => {
+      const el = document.getElementById(id);
+      el.classList.remove('running','done');
+      if (i + 1 < p) el.classList.add('done');
+      else if (i + 1 === p) el.classList.add('running');
+    });
+  }
+
+  function updateBar(progress) {
+    document.getElementById('ap-phase-fill').style.width = (progress * 100) + '%';
+  }
+
+  // ── Posiciones clave del recorrido ─────────────────────────
+  // Fase 1 destino: [0, HELIX_H0, -HELIX_R]  (arranque de la hélice, angulo=π/2 norte)
+  // Fase 2 destino: [HELIX_R, HELIX_H0, 0]   (avance recto hasta borde del círculo)
+  // Fase 3: hélice descendente 2 vueltas hasta altura HELIX_H1
+  // Fase 4: recta hacia [6, HELIX_H1, 0] y luego aterriza
+
+  function start() {
+    if (active) return;
+    physics.pos    = [0, 0, 0];
+    physics.vel    = [0, 0, 0];
+    physics.rot    = [0, 0, 0];
+    physics.angVel = [0, 0, 0];
+    physics.motors = [0, 0, 0, 0];
+    physics.onGround = true;
+    overridePos = false;
+    showVectors = false;
+    helixAngle  = Math.PI / 2; // empieza en el eje +Z del círculo
+
+    phase = 1; phaseTime = 0; active = true;
+    speedMult = parseFloat(document.getElementById('ap-speed-slider').value);
+
+    document.getElementById('ap-start-btn').classList.add('running');
+    setBadge('ACTIVO', '#44ff88');
+    updatePhaseUI(1); updateBar(0);
+    setStatus('① Despegue vertical...');
+    flightLog.add('🤖 AUTOPILOTO', 'Recorrido helicoidal iniciado', `vel×${speedMult}`);
+  }
+
+  function stop() {
+    active = false; phase = 0; phaseTime = 0; overridePos = false; showVectors = false;
+    document.getElementById('ap-start-btn').classList.remove('running');
+    setBadge('INACTIVO', '#ffcc44');
+    PHASE_IDS.forEach(id => document.getElementById(id).classList.remove('running','done'));
+    updateBar(0); setStatus('Recorrido cancelado.');
+  }
+
+  // Lerp suave
+  function lerp(a, b, t) { return a + (b - a) * Math.min(Math.max(t, 0), 1); }
+  function lerpArr(a, b, t) { return a.map((v,i) => lerp(v, b[i], t)); }
+
+  // Ease in-out cúbico
+  function easeInOut(t) { return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2,3)/2; }
+
+  // ── getInputs: llamado cada frame, devuelve inputs O null ──
+  function getInputs(dt) {
+    if (!active) return null;
+
+    const sp = speedMult;
+    const PHASE_DURS = [0, 3.0, 2.5, HELIX_DUR, 5.0];
+    const phaseDur = PHASE_DURS[phase] / sp;
+    phaseTime += dt;
+    const t = phaseTime;
+    const prog = Math.min(t / phaseDur, 1.0);
+    updateBar(prog);
+
+    // ── FASE 1: Despegue vertical hasta HELIX_H0 ─────────────
+    if (phase === 1) {
+      setStatus(`① Despegue: subiendo a ${HELIX_H0}m...`);
+      overridePos = true;
+      const ep = easeInOut(prog);
+      physics.pos[0] = 0;
+      physics.pos[1] = lerp(0, HELIX_H0, ep);
+      physics.pos[2] = 0;
+      physics.vel    = [0, (HELIX_H0 / phaseDur) * (1 - prog), 0];
+      physics.rot    = [0, 0, 0];
+      // Simula motors activos
+      const thr = 0.536 + 0.22 * (1 - prog);
+      physics.motors = [thr, thr, thr, thr];
+      if (prog >= 1.0) nextPhase();
+    }
+
+    // ── FASE 2: Recta hacia el borde del círculo ──────────────
+    else if (phase === 2) {
+      setStatus('② Avance recto al inicio de la hélice...');
+      overridePos = true;
+      const ep = easeInOut(prog);
+      // Va de [0, H0, 0] → [HELIX_R, H0, 0]  (eje +X)
+      physics.pos[0] = lerp(0, HELIX_R, ep);
+      physics.pos[1] = HELIX_H0;
+      physics.pos[2] = 0;
+      const vx = HELIX_R / phaseDur;
+      physics.vel = [vx * (1 - ep * 0.8), 0, 0];
+      // Inclina pitch hacia adelante
+      physics.rot[0] = -0.18 * Math.sin(prog * Math.PI);
+      physics.rot[1] = 0;
+      physics.motors = [0.536, 0.536, 0.536, 0.536];
+      if (prog >= 1.0) {
+        helixAngle = 0; // empieza en eje +X del círculo
+        nextPhase();
+      }
+    }
+
+    // ── FASE 3: Hélice descendente ────────────────────────────
+    // Posición paramétrica:  x(θ)= R·cos(θ)   z(θ)= R·sin(θ)   y(θ)= H0 - (H0-H1)·θ/(2π·N)
+    // Velocidad:   vx= -R·ω·sin(θ)   vz= R·ω·cos(θ)   vy= -(H0-H1)·ω/(2π·N)
+    // Aceleración centrípeta: ax= -R·ω²·cos(θ)  az= -R·ω²·sin(θ)
+    else if (phase === 3) {
+      overridePos = true;
+      showVectors = true;
+      const totalAngle = HELIX_TURNS * 2 * Math.PI;
+      const omega = (totalAngle / phaseDur) * sp; // vel angular rad/s
+      helixAngle += omega * dt;
+      const theta = helixAngle;
+      const frac  = theta / totalAngle;
+      const alt   = lerp(HELIX_H0, HELIX_H1, Math.min(frac,1));
+
+      physics.pos[0] = HELIX_CX + HELIX_R * Math.cos(theta);
+      physics.pos[1] = alt;
+      physics.pos[2] = HELIX_CZ + HELIX_R * Math.sin(theta);
+
+      // Velocidad tangente
+      const vx = -HELIX_R * omega * Math.sin(theta);
+      const vz =  HELIX_R * omega * Math.cos(theta);
+      const vy = -(HELIX_H0 - HELIX_H1) * omega / totalAngle;
+      physics.vel = [vx, vy, vz];
+
+      // Aceleración centrípeta (apunta al centro del círculo)
+      const acx = -HELIX_R * omega * omega * Math.cos(theta);
+      const acz = -HELIX_R * omega * omega * Math.sin(theta);
+      vecVelocity    = [vx, vy, vz];
+      vecCentripetal = [acx, 0, acz];
+
+      // Orienta el dron tangente a la hélice (yaw = dirección de movimiento)
+      const yawAngle = Math.atan2(vx, vz);
+      physics.rot[1] = yawAngle;
+      physics.rot[0] = -0.08; // leve pitch hacia abajo
+      physics.rot[2] =  0.06 * Math.cos(theta); // leve balanceo
+
+      physics.motors = [0.51, 0.51, 0.51, 0.51];
+
+      const helixPct = Math.min(helixAngle / totalAngle * 100, 100).toFixed(0);
+      setStatus(`③ Hélice: ${helixPct}% | alt=${alt.toFixed(1)}m | θ=${(theta*180/Math.PI%360).toFixed(0)}°`);
+
+      if (helixAngle >= totalAngle) {
+        showVectors = false;
+        nextPhase();
+      }
+    }
+
+    // ── FASE 4: Recta final + aterrizaje ─────────────────────
+    else if (phase === 4) {
+      overridePos = true;
+      const startPos = [HELIX_CX + HELIX_R * Math.cos(helixAngle),
+                         HELIX_H1,
+                         HELIX_CZ + HELIX_R * Math.sin(helixAngle)];
+      const endPos   = [startPos[0] + 4.0, 0, startPos[2]];
+
+      if (prog < 0.55) {
+        // Tramo recto
+        setStatus('④ Recta final...');
+        const lp = easeInOut(prog / 0.55);
+        physics.pos[0] = lerp(startPos[0], endPos[0], lp);
+        physics.pos[1] = lerp(startPos[1], 1.5, lp);
+        physics.pos[2] = lerp(startPos[2], endPos[2], lp);
+        physics.rot[0] = -0.15 * (1 - lp);
+        physics.rot[1] = 0;
+        physics.motors = [0.536, 0.536, 0.536, 0.536];
+      } else {
+        // Aterrizaje
+        setStatus('④ Aterrizando...');
+        const lp = easeInOut((prog - 0.55) / 0.45);
+        physics.pos[0] = endPos[0];
+        physics.pos[1] = lerp(1.5, 0, lp);
+        physics.pos[2] = endPos[2];
+        physics.rot[0] = 0; physics.rot[1] = 0; physics.rot[2] = 0;
+        const thr = 0.536 * (1 - lp * 0.9);
+        physics.motors = [thr, thr, thr, thr];
+      }
+      physics.vel = [0, 0, 0];
+      if (prog >= 1.0) {
+        physics.pos[1] = 0;
+        physics.motors = [0,0,0,0];
+        physics.onGround = true;
+        finished();
+      }
+    }
+
+    // Inputs neutros (la física real queda subordinada al override de pos)
+    return { throttle: 0.536, pitch: 0, roll: 0, yaw: 0 };
+  }
+
+  function nextPhase() {
+    phase++; phaseTime = 0;
+    updatePhaseUI(phase);
+    speedMult = parseFloat(document.getElementById('ap-speed-slider').value);
+    if (phase > 4) finished();
+  }
+
+  function finished() {
+    active = false; phase = 0; overridePos = false; showVectors = false;
+    document.getElementById('ap-start-btn').classList.remove('running');
+    setBadge('COMPLETO', '#00d4ff');
+    PHASE_IDS.forEach(id => document.getElementById(id).classList.add('done'));
+    updateBar(1);
+    setStatus('✅ Recorrido helicoidal completado!');
+    flightLog.add('✅ AUTOPILOTO', 'Hélice completada', `R=${HELIX_R}m · N=${HELIX_TURNS} vueltas`);
+    setTimeout(() => {
+      setBadge('INACTIVO', '#ffcc44');
+      PHASE_IDS.forEach(id => document.getElementById(id).classList.remove('done'));
+      updateBar(0); setStatus('Listo para iniciar...');
+    }, 4000);
+  }
+
+  // Speed slider
+  document.getElementById('ap-speed-slider').addEventListener('input', e => {
+    document.getElementById('ap-speed-val').innerText = parseFloat(e.target.value).toFixed(1) + '×';
+  });
+
+  return {
+    start, stop, getInputs,
+    get active()         { return active; },
+    get showVectors()    { return showVectors; },
+    get vecVelocity()    { return vecVelocity; },
+    get vecCentripetal() { return vecCentripetal; }
+  };
+})();
+
+// ===================== OVERLAY 2D — VECTORES CINEMÁTICOS =====================
+// Dibuja sobre el canvas principal los vectores velocidad y aceleración centrípeta
+// cuando el dron está en la fase helicoidal (igual que la imagen de referencia)
+function drawVectorOverlay(vp, W, H) {
+  if (!autopilot.showVectors) return;
+
+  const ctx2d = document.getElementById('overlay2d').getContext('2d');
+  ctx2d.clearRect(0, 0, W, H);
+
+  const origin = project(physics.pos, vp, W, H);
+  if (!origin || origin.z <= 0) return;
+
+  const SCALE_V = 0.5;  // escala visual para velocidad
+  const SCALE_A = 0.9;  // escala visual para aceleración
+
+  const vel = autopilot.vecVelocity;
+  const acc = autopilot.vecCentripetal;
+
+  // Proyectar punta de la velocidad
+  const vTip = [
+    physics.pos[0] + vel[0] * SCALE_V,
+    physics.pos[1] + vel[1] * SCALE_V,
+    physics.pos[2] + vel[2] * SCALE_V
+  ];
+  const aTip = [
+    physics.pos[0] + acc[0] * SCALE_A,
+    physics.pos[1] + acc[1] * SCALE_A,
+    physics.pos[2] + acc[2] * SCALE_A
+  ];
+
+  const vEnd = project(vTip, vp, W, H);
+  const aEnd = project(aTip, vp, W, H);
+
+  function drawArrow(ctx, x1,y1, x2,y2, color, label) {
+    if (!x2 || !y2) return;
+    const dx = x2-x1, dy = y2-y1;
+    const len = Math.sqrt(dx*dx+dy*dy);
+    if (len < 5) return;
+    const ux = dx/len, uy = dy/len;
+    const headLen = Math.min(16, len*0.35);
+    ctx.save();
+    ctx.strokeStyle = color; ctx.fillStyle = color;
+    ctx.lineWidth = 3; ctx.lineCap = 'round';
+    // Shaft
+    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+    // Arrowhead
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - headLen*(ux - 0.5*uy), y2 - headLen*(uy + 0.5*ux));
+    ctx.lineTo(x2 - headLen*(ux + 0.5*uy), y2 - headLen*(uy - 0.5*ux));
+    ctx.closePath(); ctx.fill();
+    // Label
+    ctx.font = 'bold 12px Courier New';
+    ctx.fillText(label, x2 + 8, y2 + 4);
+    ctx.restore();
+  }
+
+  // Velocidad = verde
+  if (vEnd) drawArrow(ctx2d, origin.x, origin.y, vEnd.x, vEnd.y, '#44ff88', 'v⃗ (tangente)');
+  // Centrípeta = rojo
+  if (aEnd) drawArrow(ctx2d, origin.x, origin.y, aEnd.x, aEnd.y, '#ff4444', 'a⃗ (centrípeta)');
+
+  // Punto origen
+  ctx2d.save();
+  ctx2d.fillStyle = '#ffffff';
+  ctx2d.beginPath(); ctx2d.arc(origin.x, origin.y, 5, 0, Math.PI*2); ctx2d.fill();
+  ctx2d.restore();
+
+  // Info cinemática en esquina
+  const spd = Math.sqrt(vel[0]**2+vel[1]**2+vel[2]**2);
+  const acp = Math.sqrt(acc[0]**2+acc[2]**2);
+  ctx2d.save();
+  ctx2d.font = '11px Courier New';
+  ctx2d.fillStyle = '#44ff88';
+  ctx2d.fillText(`|v⃗| = ${spd.toFixed(2)} m/s`, 20, H - 80);
+  ctx2d.fillStyle = '#ff4444';
+  ctx2d.fillText(`|a⃗c| = ${acp.toFixed(2)} m/s²`, 20, H - 62);
+  ctx2d.fillStyle = '#aaddff';
+  ctx2d.fillText(`R = 3.5 m  ·  ω = ${(spd/3.5).toFixed(2)} rad/s`, 20, H - 44);
+  ctx2d.restore();
+}
+
+let lastTime = 0;
+function frame(ts){
+  const dt = lastTime ? (ts - lastTime) / 1000 : 0.016;
+  lastTime = ts;
+  requestAnimationFrame(frame);
+
+  // --- 1. Inputs ---
+  let inputs;
+  // Autopiloto tiene prioridad sobre control manual
+  const apInputs = autopilot.getInputs(dt);
+  if (apInputs) {
+    inputs = apInputs;
+  } else {
+    inputs = {
+      throttle: keys['KeyQ'] ? 0.85 : (keys['KeyW'] ? 0.70 : (keys['KeyS'] ? 0.25 : 0.0)),
+      pitch: ((keys['ArrowUp']||keys['KeyR']) ? 0.22 : 0) - ((keys['ArrowDown']||keys['KeyF']) ? 0.22 : 0),
+      roll: ((keys['ArrowRight']||keys['KeyT']) ? 0.22 : 0) - ((keys['ArrowLeft']||keys['KeyV']) ? 0.22 : 0),
+      yaw: (keys['KeyD'] ? 0.15 : 0) - (keys['KeyA'] ? 0.15 : 0)
+    };
+    // Hover mode: if no vertical keys, and we are in air, try to maintain alt
+    if (!keys['KeyQ'] && !keys['KeyW'] && !keys['KeyS'] && !keys['Space'] && physics.pos[1] > 0.1) {
+      inputs.throttle = 0.536;
+    }
+    if (keys['ShiftLeft']) inputs.throttle = 1.0;
+    if (keys['Space']) inputs.throttle = 0.0;
+  }
+
+  // --- 2. Physics Update ---
+  physics.update(Math.min(dt, 0.05), inputs);
+
+  // --- 3. Rendering Setup ---
+  const W=canvas.width, H=canvas.height;
+  gl.viewport(0,0,W,H);
+  gl.clearColor(0.03,0.05,0.10,1);
+  gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+  gl.enable(gl.DEPTH_TEST); gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK);
+
+  const proj=M4.proj(0.80,W/H,0.05,100);
+  const viewBase=M4.tran(0, 0, -zoom); // Base zoom/offset
+  
+  // Drone Model Matrix from Physics
+  let model = M4.tran(physics.pos[0], physics.pos[1], physics.pos[2]);
+  model = M4.mul(model, M4.rotY(physics.rot[1])); // Yaw
+  model = M4.mul(model, M4.rotX(physics.rot[0])); // Pitch
+  model = M4.mul(model, M4.rotZ(physics.rot[2])); // Roll
+  
+  // CAMERA: orbits around drone, follows its world position
+  // view = T(0,0,-zoom) * Rx(pitch) * Ry(yaw) * T(-dronePos)
+  const camRot = M4.mul(M4.rotX(rotX), M4.rotY(rotY_));
+  const camTarget = M4.tran(-physics.pos[0], -(physics.pos[1] + 0.3), -physics.pos[2]);
+  const view = M4.mul(viewBase, M4.mul(camRot, camTarget));
+  
+  const vp = M4.mul(proj, view);
+  const mvp = M4.mul(vp, model);
+
+  // --- 4a. Draw Ground (static at world origin, not attached to drone) ---
+  const groundModel = M4.ident();
+  const groundMvp = M4.mul(vp, groundModel);
+  drawMesh(ground, groundMvp, groundModel);
+
+  // --- 4b. Draw Drone Body ---
+  drawMesh(body, mvp, model);
+
+  // --- 5. Draw Animated Blades & Update Labels ---
+  const angle=ts*0.01;
+  for(let i=0;i<4;i++){
+    const [mx,my,mz]=motorPos[i];
+    const rpm = Math.floor(physics.motors[i] * 12000);
+    const force = (physics.motors[i] * physics.kThrust).toFixed(2);
+    
+    // Rotate blades
+    const dir = propSpeeds[i] * angle * (0.5 + physics.motors[i]*2);
+    const spinM=M4.mul(M4.tran(mx,0,mz), M4.mul(M4.rotY(dir),M4.tran(-mx,0,-mz)));
+    const bModel=M4.mul(model,spinM);
+    const bMvp=M4.mul(vp,bModel);
+    drawMesh(blades[i], bMvp, bModel);
+
+    // Update Label Position
+    // We need to transform the label point [mx, my+0.15, mz] from drone space to world space
+    // and then to screen space.
+    const lx = mx, ly = my + 0.15, lz = mz;
+    const wx = model[0]*lx + model[4]*ly + model[8]*lz + model[12];
+    const wy = model[1]*lx + model[5]*ly + model[9]*lz + model[13];
+    const wz = model[2]*lx + model[6]*ly + model[10]*lz + model[14];
+    
+    const screenPos = project([wx, wy, wz], vp, W, H);
+    const label = document.getElementById(`label-${i}`);
+    if (screenPos && screenPos.z > 0) {
+      label.style.display = 'block';
+      label.style.left = `${screenPos.x}px`;
+      label.style.top = `${screenPos.y}px`;
+      label.innerHTML = `M${i+1}: ${rpm} RPM<br>F: ${force}N`;
+    } else {
+      label.style.display = 'none';
+    }
+
+    // Update state panel
+    document.querySelector(`#state-m${i+1} .val`).innerText = rpm;
+  }
+
+  // --- 6. Update UI Panels ---
+  document.querySelector('#state-alt .val').innerText = Math.max(0, physics.pos[1]).toFixed(2) + 'm';
+
+  const thrusts = physics.motors.map(m => m * physics.kThrust);
+  const totalThrust = thrusts.reduce((a,b)=>a+b, 0);
+  const horizVel = Math.sqrt(physics.vel[0]**2 + physics.vel[2]**2);
+  const pitchDeg = physics.rot[0]*180/Math.PI;
+  const yawDeg   = physics.rot[1]*180/Math.PI;
+  const rollDeg  = physics.rot[2]*180/Math.PI;
+  const ay_val   = totalThrust/physics.mass - physics.gravity;
+  const tauRoll  = physics.L*(thrusts[0]+thrusts[2]-thrusts[1]-thrusts[3]);
+  const tauPitch = physics.L*(thrusts[0]+thrusts[1]-thrusts[2]-thrusts[3]);
+  const tauYaw   = physics.kTorque*(physics.motors[0]+physics.motors[2]-physics.motors[1]-physics.motors[3]);
+
+  // Update structured math panel
+  const v = (n,d=2) => Number(n).toFixed(d);
+  document.getElementById('mf-thrust').innerText     = v(totalThrust) + ' N';
+  document.getElementById('mf-thrust-expand').innerText = '5.5×(' + v(physics.motors[0],2) + '+' + v(physics.motors[1],2) + '+' + v(physics.motors[2],2) + '+' + v(physics.motors[3],2) + ')';
+  document.getElementById('mf-thrust2').innerText    = '= ' + v(totalThrust) + ' N';
+  document.getElementById('mf-roll').innerText       = v(tauRoll,3) + ' N·m';
+  document.getElementById('mf-pitch').innerText      = v(tauPitch,3) + ' N·m';
+  document.getElementById('mf-yaw').innerText        = v(tauYaw,3) + ' N·m';
+  document.getElementById('mf-ay').innerText         = v(ay_val,2) + ' m/s²';
+  document.getElementById('mf-ay-expand').innerText  = v(totalThrust) + '/' + physics.mass + ' - 9.81';
+  document.getElementById('mf-ay2').innerText        = '= ' + v(ay_val,2);
+  document.getElementById('mf-vy').innerText         = v(physics.vel[1],2) + ' m/s';
+  document.getElementById('mf-y').innerText          = v(Math.max(0,physics.pos[1]),2) + ' m';
+  document.getElementById('mf-pos').innerText        = '[' + v(physics.pos[0]) + ', ' + v(physics.pos[1]) + ', ' + v(physics.pos[2]) + ']';
+  document.getElementById('mf-vel').innerText        = v(horizVel) + ' / ' + v(physics.vel[1]);
+  document.getElementById('mf-rot').innerText        = '[' + v(pitchDeg,1) + '°, ' + v(yawDeg,1) + '°, ' + v(rollDeg,1) + '°]';
+
+  // Update graph (4 channels + trajectory)
+  graph.update(physics.pos[1], physics.vel[1], horizVel, pitchDeg, physics.pos[0], physics.pos[2]);
+
+  // Draw 2D vector overlay (velocidad + centrípeta) when in helix phase
+  drawVectorOverlay(vp, W, H);
+
+  // Update flight log
+  flightLog.update(physics, inputs, dt);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
